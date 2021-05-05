@@ -12,56 +12,33 @@ st.set_option('deprecation.showPyplotGlobalUse', False)
 st.title('Gapminder Dashboard')
 st.markdown('### Bubble chart depicting relationship between GNI per capita and Life expectancy')
 
-read_and_cache_csv = st.cache(pd.read_csv)
 
-gni_data = read_and_cache_csv('/Users/vahe_shelunts/Desktop/HWR Winter 2020:2021/Enterprise architectures/gapminder_dashboard/app/gnipercapita_ppp.csv').set_index('country')
-life_exp_data = read_and_cache_csv('/Users/vahe_shelunts/Desktop/HWR Winter 2020:2021/Enterprise architectures/gapminder_dashboard/app/life_expectancy_years.csv').set_index('country')
-pop_data = read_and_cache_csv('/Users/vahe_shelunts/Desktop/HWR Winter 2020:2021/Enterprise architectures/gapminder_dashboard/app/population_total.csv').set_index('country')
+@st.cache
+def load_and_preprocess_data(data1, data2, data3):
+    """Loads and preprocess the data from 3 different (ordered!) sources and then merges them"""
+    data1 = pd.read_csv('/Users/vahe_shelunts/Desktop/HWR Winter 2020:2021/Enterprise architectures/gapminder_dashboard/app/{}'.format(data1)).set_index('country') #reading the data
+    data2 = pd.read_csv('/Users/vahe_shelunts/Desktop/HWR Winter 2020:2021/Enterprise architectures/gapminder_dashboard/app/{}'.format(data2)).set_index('country')
+    data3 = pd.read_csv('/Users/vahe_shelunts/Desktop/HWR Winter 2020:2021/Enterprise architectures/gapminder_dashboard/app/{}'.format(data3)).set_index('country')
+    data1.bfill(axis=1, inplace=True) #backward and then forward filling for each datasource
+    data1.ffill(axis=1, inplace=True)
+    data2.bfill(axis=1, inplace=True)
+    data2.ffill(axis=1, inplace=True)
+    data3.bfill(axis=1, inplace=True)
+    data3.ffill(axis=1, inplace=True)
+    data1['country'] = data1.index #creating a new column with country names
+    data2['country'] = data2.index
+    data3['country'] = data3.index
+    data1.reset_index(drop=True, inplace=True) #resetting the index
+    data2.reset_index(drop=True, inplace=True)
+    data3.reset_index(drop=True, inplace=True)
+    data1 = data1.melt(id_vars='country', var_name='year', value_name='gni_per_capita') #redesigning the dataframe so that rows with column names represent one instance in a row
+    data2 = data2.melt(id_vars='country', var_name='year', value_name='life_exp')
+    data3 = data3.melt(id_vars='country', var_name='year', value_name='population')
+    dfs = data1.merge(data2, on=['country','year']).merge(data3, on=['country','year']) #merging dataframes
+    dfs['gni_per_capita'] = np.log(dfs['gni_per_capita']) #converting gni to logarithmic scale
+    return dfs
 
-
-
-#backward filling and then forward filling on column values
-gni_data.bfill(axis=1, inplace=True) 
-gni_data.head()
-
-
-gni_data.ffill(axis=1, inplace=True)
-gni_data.info()
-
-
-life_exp_data.bfill(axis=1, inplace=True)
-life_exp_data.ffill(axis=1, inplace=True)
-life_exp_data.info()
-
-
-pop_data.bfill(axis=1, inplace=True)
-pop_data.ffill(axis=1, inplace=True)
-pop_data.info()
-
-
-#creating a new column with country names
-gni_data['country'] = gni_data.index
-life_exp_data['country'] = life_exp_data.index
-pop_data['country'] = pop_data.index
-
-
-#resetting the index
-gni_data.reset_index(drop=True, inplace=True)
-life_exp_data.reset_index(drop=True, inplace=True)
-pop_data.reset_index(drop=True, inplace=True)
-
-
-gni_data = gni_data.melt(id_vars='country', var_name='year', value_name='gni_per_capita')
-life_exp_data = life_exp_data.melt(id_vars='country', var_name='year', value_name='life_exp')
-pop_data = pop_data.melt(id_vars='country', var_name='year', value_name='population')
-
-
-pop_data.info()
-dfs = gni_data.merge(life_exp_data, on=['country','year']).merge(pop_data, on=['country','year'])
-
-
-dfs['gni_per_capita'] = np.log(dfs['gni_per_capita'])
-
+dfs = load_and_preprocess_data('gnipercapita_ppp.csv', 'life_expectancy_years.csv', 'population_total.csv')
 
 year = st.sidebar.slider(min_value=1990, max_value=2020, step=1, label='Year')
 country_selection = list(np.unique(dfs.country))
